@@ -1,0 +1,102 @@
+name: Custom.DFIR.UploadFile
+description: |
+  Write a base64-encoded payload to a file on the endpoint.
+  Authorized DFIR/Threat Hunting use only.
+
+  Uses tempfile() to write ContentBase64 to a temp file on the client,
+  then decodes it to RemotePath using the OS-native base64 decoder.
+  This avoids command-line length limits for large payloads.
+
+  After writing, echoes the remote SHA256 as "SHA256:<hash>" for validation
+  by the Python layer.
+
+  Size limit: governed by gRPC max_message_size on your Velociraptor server.
+  Default Velociraptor configs allow 80 MB; base64 expands by ~1.33x.
+
+author: DFIR Team
+type: CLIENT
+
+parameters:
+  - name: RemotePath
+    description: Absolute destination path on the endpoint
+    type: string
+    default: "C:/Temp/dfir_payload.exe"
+
+  - name: ContentBase64
+    description: Base64-encoded file content
+    type: string
+
+  - name: ExpectedSHA256
+    description: Expected SHA256 of decoded content (for remote validation logging)
+    type: string
+    default: ""
+
+sources:
+  - name: UploadResult
+    query: |
+      LET os_info <= SELECT OS FROM info()
+      LET is_windows <= os_info[0].OS =~ "(?i)windows"
+
+      -- Write the base64 content to a temp file on the client.
+      -- tempfile() with data= creates the file and returns its path.
+      -- remove_last=TRUE ensures the temp file is deleted when the query ends.
+      LET b64file <= tempfile(data=ContentBase64, extension=".b64", remove_last=TRUE)
+
+      SELECT Stdout, Stderr, ReturnCode FROM if(
+        condition=is_windows,
+        then={
+          -- Windows: read temp file, decode base64, write to RemotePath, echo SHA256
+          SELECT Stdout, Stderr, ReturnCode
+          FROM execve(
+            argv=[
+              "powershell.exe",
+              "-NoProfile", "-NonInteractive",
+              "-ExecutionPolicy", "Bypass",
+              "-Command", format(
+                format='''
+                  $ErrorActionPreference = "Stop"
+                  try {
+                    $b64 = [IO.File]::ReadAllText('%v').Trim()
+                    $bytes = [Convert]::FromBase64String($b64)
+                    $dir = Split-Path -Parent '%v'
+                    if ($dir -and !(Test-Path $dir)) {
+                        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+                    }
+                    [IO.File]::WriteAllBytes('%v', $bytes)
+                    $h = (Get-FileHash -Path '%v' -Algorithm SHA256).Hash
+                    Write-Output "SHA256:$h"
+                    Write-Output "SIZE:$($bytes.Length)"
+                    Write-Output "OK"
+                  } catch {
+                    Write-Error $_.Exception.Message
+                    exit 1
+                  }
+                ''',
+                args=[b64file, RemotePath, RemotePath, RemotePath]
+              )
+            ],
+            length=1000000
+          )
+        },
+        else={
+          -- Linux/macOS: decode temp file to RemotePath, echo sha256sum
+          SELECT Stdout, Stderr, ReturnCode
+          FROM execve(
+            argv=[
+              "/bin/sh", "-c",
+              format(
+                format='''
+                  set -e
+                  mkdir -p "$(dirname '%v')"
+                  base64 -d < '%v' > '%v'
+                  echo "SHA256:$(sha256sum '%v' | awk '{print $1}')"
+                  echo "SIZE:$(wc -c < '%v')"
+                  echo "OK"
+                ''',
+                args=[RemotePath, b64file, RemotePath, RemotePath, RemotePath]
+              )
+            ],
+            length=1000000
+          )
+        }
+      )

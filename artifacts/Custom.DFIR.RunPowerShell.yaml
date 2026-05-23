@@ -1,0 +1,33 @@
+name: Custom.DFIR.RunPowerShell
+description: |
+  Execute a PowerShell script on a Windows endpoint.
+  Authorized DFIR/Threat Hunting use only.
+  Runs: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command <script>
+
+  NOTE: The Timeout parameter is informational only. The actual flow timeout
+  is controlled by the Python layer via start_collection(timeout=N).
+
+author: DFIR Team
+type: CLIENT
+
+parameters:
+  - name: Script
+    description: PowerShell script content to execute
+    type: string
+    default: "Get-Date"
+
+sources:
+  - name: PowerShellOutput
+    query: |
+      SELECT Stdout, Stderr, ReturnCode
+      FROM execve(
+        argv=[
+          "powershell.exe",
+          "-NoProfile",
+          "-NonInteractive",
+          "-ExecutionPolicy", "Bypass",
+          "-Command", Script
+        ],
+        length=10000000,
+        sep="\n"
+      )

@@ -1,0 +1,26 @@
+name: Custom.DFIR.RunClientVQL
+description: |
+  Execute arbitrary client-side VQL on the endpoint.
+  Authorized DFIR/Threat Hunting use only.
+
+  The query() VQL plugin evaluates the Query parameter string as a VQL query.
+  This is a documented Velociraptor VQL function available in all modern versions.
+
+  Example queries:
+    SELECT Pid, Name, Exe, Username FROM pslist()
+    SELECT * FROM netstat()
+    SELECT FullPath, Size FROM glob(globs="C:/Users/**/*.exe")
+
+author: DFIR Team
+type: CLIENT
+
+parameters:
+  - name: Query
+    description: VQL query string to execute on the client
+    type: string
+    default: "SELECT Pid, Name, Exe FROM pslist() LIMIT 10"
+
+sources:
+  - name: VQLResults
+    query: |
+      SELECT * FROM query(query=Query)

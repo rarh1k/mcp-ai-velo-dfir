@@ -1,0 +1,61 @@
+name: Custom.DFIR.RecursiveCollect
+description: |
+  Recursively collect files from a directory on the endpoint.
+  Authorized DFIR/Threat Hunting use only.
+
+  IncludeGlob: glob pattern appended to RootPath (e.g. ** or **/*.exe).
+               Uses Velociraptor glob() syntax with "auto" accessor.
+
+  ExcludeRegex: regex pattern applied via =~ to OSPath string.
+                NOTE: this is a regex, NOT a glob pattern.
+                Example: ".*\\.log$"  excludes files ending in .log
+                Example: ".*(temp|cache).*"  excludes temp/cache paths
+
+  MaxFiles:     Soft limit enforced by Python layer (MaxFiles rows returned).
+  MaxTotalMb:   Soft limit on total size. Enforced in Python layer.
+
+author: DFIR Team
+type: CLIENT
+
+parameters:
+  - name: RootPath
+    description: Root directory path to collect from
+    type: string
+    default: "C:/staging"
+
+  - name: IncludeGlob
+    description: Glob pattern relative to RootPath (default ** = all files)
+    type: string
+    default: "**"
+
+  - name: ExcludeRegex
+    description: Regex pattern to exclude matching paths (empty = no exclusion)
+    type: string
+    default: ""
+
+  - name: MaxFiles
+    description: Maximum number of files to collect (soft cap, enforced by Python)
+    type: int
+    default: "100"
+
+  - name: MaxTotalMb
+    description: Soft cap on total collected size in MB (enforced by Python)
+    type: int
+    default: "500"
+
+sources:
+  - name: RecursiveFiles
+    query: |
+      LET full_glob <= RootPath + "/" + IncludeGlob
+
+      SELECT
+        OSPath,
+        Size,
+        Mtime,
+        hash(path=OSPath, accessor="auto") AS Hashes,
+        upload(file=OSPath, accessor="auto") AS Upload
+      FROM glob(globs=full_glob, accessor="auto")
+      WHERE NOT IsDir
+        AND Size > 0
+        AND (ExcludeRegex = "" OR NOT OSPath =~ ExcludeRegex)
+      LIMIT 10000

@@ -1,0 +1,37 @@
+name: Custom.DFIR.CollectSingleFile
+description: |
+  Collect a single file from the endpoint into Velociraptor server storage.
+  Authorized DFIR/Threat Hunting use only.
+
+  Returns file metadata including OSPath, Size, SHA256, and upload reference.
+  Files larger than MaxSizeMb are skipped and not uploaded.
+
+author: DFIR Team
+type: CLIENT
+
+parameters:
+  - name: Path
+    description: Absolute path to the target file on the endpoint
+    type: string
+    default: "C:/Windows/Temp/suspicious.exe"
+
+  - name: MaxSizeMb
+    description: Maximum file size in MB to collect (default 100)
+    type: int
+    default: "100"
+
+sources:
+  - name: FileCollection
+    query: |
+      LET max_bytes <= int(int=MaxSizeMb) * 1024 * 1024
+
+      SELECT
+        OSPath,
+        Size,
+        Mtime,
+        Atime,
+        Ctime,
+        hash(path=OSPath, accessor="auto") AS Hashes,
+        upload(file=OSPath, accessor="auto") AS Upload
+      FROM stat(filename=Path, accessor="auto")
+      WHERE NOT IsDir AND Size < max_bytes

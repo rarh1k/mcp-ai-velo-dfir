@@ -1,0 +1,19 @@
+# Secrets — never commit
+api_client.yaml
+*.yaml.local
+.env
+*.pem
+*.key
+*.crt
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp

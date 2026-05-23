@@ -1,0 +1,43 @@
+name: Custom.DFIR.RunShell
+description: |
+  Execute an arbitrary shell command on the endpoint.
+  Authorized DFIR/Threat Hunting use only.
+  Auto-detects Windows (cmd.exe /c) vs Linux (/bin/sh -c).
+
+  NOTE: The Timeout parameter is informational only. The actual flow timeout
+  is controlled by the Python layer via start_collection(timeout=N).
+
+author: DFIR Team
+type: CLIENT
+
+parameters:
+  - name: Command
+    description: Shell command to execute
+    type: string
+    default: "whoami"
+
+sources:
+  - name: ShellOutput
+    query: |
+      LET os_info <= SELECT OS FROM info()
+      LET is_windows <= os_info[0].OS =~ "(?i)windows"
+
+      SELECT Stdout, Stderr, ReturnCode FROM if(
+        condition=is_windows,
+        then={
+          SELECT Stdout, Stderr, ReturnCode
+          FROM execve(
+            argv=["cmd.exe", "/c", Command],
+            length=10000000,
+            sep="\n"
+          )
+        },
+        else={
+          SELECT Stdout, Stderr, ReturnCode
+          FROM execve(
+            argv=["/bin/sh", "-c", Command],
+            length=10000000,
+            sep="\n"
+          )
+        }
+      )
