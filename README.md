@@ -8,9 +8,10 @@ and the dual-use risk that comes with the same primitives.
 > a real Velociraptor deployment is on their own - review the code, the
 > artifacts, and the threat model first.
 
+## Demo
 
 
-
+https://github.com/user-attachments/assets/8f3ee9e6-70b1-4719-997c-479a6cbdc1b2
 
 
 ## Background
@@ -108,10 +109,6 @@ Code is published **as-is**. Known issues: VQL injection in
 `_read_filestore`, no `remote_path` validation in `upload_file`,
 `MaxFiles`/`MaxTotalMb` not enforced, optional `case_id`. Fix before
 connecting to anything you care about.
-
-## Demo
-
-_(video link goes here)_
 
 ## References
 
